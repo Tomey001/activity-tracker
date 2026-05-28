@@ -55,8 +55,8 @@ RUN php artisan cache:clear || true
 RUN php artisan view:clear || true
 RUN php artisan route:clear || true
 
-# Expose port
+# Expose Railway port
 EXPOSE 8080
 
-# Start command
-CMD php artisan migrate --force && php -S 0.0.0.0:$PORT -t public
+# Start Laravel
+CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"]
