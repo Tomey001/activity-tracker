@@ -1,18 +1,62 @@
-FROM php:8.4-cli
+FROM php:8.2-cli
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git unzip curl libzip-dev zip
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    nodejs \
+    npm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install zip pdo pdo_mysql
+# Install PHP extensions
+RUN docker-php-ext-install \
+    pdo_mysql \
+    mbstring \
+    exif \
+    pcntl \
+    bcmath \
+    gd \
+    zip
 
+# Get Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /app
+# Set working directory
+WORKDIR /var/www/html
 
+# Copy composer files first (for caching)
+COPY composer.json composer.lock ./
+
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+
+# Copy all project files
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader
+# Run composer scripts after copying files
+RUN composer run-script post-autoload-dump || true
 
-EXPOSE 10000
+# Install and build frontend
+RUN npm install && npm run build
 
-CMD php artisan serve --host=0.0.0.0 --port=10000
+# Set permissions
+RUN chmod -R 775 storage bootstrap/cache
+
+# Clear any cached config
+RUN php artisan config:clear || true
+RUN php artisan cache:clear || true
+RUN php artisan view:clear || true
+RUN php artisan route:clear || true
+
+# Expose port
+EXPOSE 8080
+
+# Start command
+CMD php artisan migrate --force && php -S 0.0.0.0:$PORT -t public
